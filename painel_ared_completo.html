@@ -57,9 +57,6 @@ h1{font-size:22px;font-weight:800;color:#1e1710;letter-spacing:-0.5px}
 .cols-menu-item{display:flex;align-items:center;gap:8px;padding:6px 4px;border-radius:8px;font-size:11px;color:#1e1710;cursor:pointer}
 .cols-menu-item:hover{background:#faf6ef}
 .cols-menu-item input{accent-color:#1e1710}
-.hidden-columns-bar{display:none;gap:6px;padding:8px 20px;border-bottom:1px solid rgba(180,155,110,0.15);flex-wrap:wrap;align-items:center;background:#fffaf2}
-.hidden-col-chip{font-size:11px;padding:4px 10px;border-radius:99px;border:1px dashed rgba(180,155,110,0.45);background:#fffcf7;color:#7a6a55;cursor:pointer}
-.hidden-col-chip:hover{background:#f4efe7;color:#1e1710}
 .filter-bar{display:flex;gap:6px;padding:8px 20px;border-bottom:1px solid rgba(180,155,110,0.15);flex-wrap:wrap;align-items:center;display:none}
 .filter-chip{font-size:11px;padding:3px 10px;border-radius:99px;border:1px solid rgba(180,155,110,0.3);background:#f4efe7;color:#7a6a55;display:flex;align-items:center;gap:5px}
 .filter-chip .x{cursor:pointer;font-size:13px}
@@ -181,7 +178,6 @@ svg .mun-path.selected{stroke:#1e1710;stroke-width:2}
         <div class="chip" id="count-chip">1878 turmas</div>
       </div>
     </div>
-    <div class="hidden-columns-bar" id="hidden-columns-bar"></div>
     <div class="filter-bar" id="filter-bar">
       <span style="font-size:11px;color:#7a6a55;font-weight:600">Filtro:</span>
       <div class="filter-chip">
@@ -759,7 +755,6 @@ function renderColumnControls(){
     headRow=document.getElementById('table-head-row');
   }
   var visibleCols=getVisibleColumns();
-  var hiddenCols=columnOrder.filter(function(key){return hiddenColumns[key];}).map(getColumnByKey).filter(Boolean);
   headRow.innerHTML=visibleCols.map(function(col){
     var arrow=sortCol===col.key?(sortDir===1?'↑':'↓'):'↕';
     var width=getColumnWidth(col.key);
@@ -827,21 +822,6 @@ function renderColumnControls(){
       renderColumnControls();
     });
   });
-
-  var hiddenBar=document.getElementById('hidden-columns-bar');
-  if(hiddenCols.length===0){
-    hiddenBar.style.display='none';
-    hiddenBar.innerHTML='';
-  } else {
-    hiddenBar.style.display='flex';
-    hiddenBar.innerHTML='<span style="font-size:11px;color:#7a6a55;font-weight:600">Colunas escondidas:</span>'
-      +hiddenCols.map(function(col){return '<button class="hidden-col-chip" type="button" data-show-col="'+col.key+'">'+col.label+' +</button>';}).join('');
-    hiddenBar.querySelectorAll('[data-show-col]').forEach(function(btn){
-      btn.addEventListener('click',function(){
-        setColumnVisibility(btn.getAttribute('data-show-col'),true);
-      });
-    });
-  }
 }
 
 function sortTable(col){
