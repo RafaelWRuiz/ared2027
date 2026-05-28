@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/painel_ared_completo.html"
+    }
+  ]
+}
