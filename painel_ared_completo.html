@@ -43,6 +43,7 @@ h1{font-size:22px;font-weight:800;color:#1e1710;letter-spacing:-0.5px}
 .table-card{background:#fffcf7;border:1px solid rgba(180,155,110,0.3);border-radius:16px;overflow:hidden}
 .table-top{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1px solid rgba(180,155,110,0.2);background:#faf6ef;gap:12px;flex-wrap:wrap}
 .table-top h3{font-size:14px;font-weight:700;color:#1e1710}
+.table-heading{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .table-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .chip{font-size:11px;padding:4px 10px;background:#fffcf7;border:1px solid rgba(180,155,110,0.35);border-radius:99px;color:#7a6a55;white-space:nowrap}
 .filter-bar{display:flex;gap:6px;padding:8px 20px;border-bottom:1px solid rgba(180,155,110,0.15);flex-wrap:wrap;align-items:center;display:none}
@@ -80,12 +81,21 @@ tr:hover td{background:#faf6ef}
 .page-btn{padding:3px 9px;border:1px solid rgba(180,155,110,0.3);border-radius:6px;font-size:11px;background:#fffcf7;color:#7a6a55;cursor:pointer}
 .page-btn:hover{background:#f4efe7}
 .page-btn.active{background:#1e1710;color:#fffcf7;border-color:#1e1710}
+.export-btn{padding:6px 12px;border:1px solid rgba(180,155,110,0.35);border-radius:10px;font-size:11px;font-weight:700;background:#faf6ef;color:#7a6a55;cursor:pointer;transition:background 0.15s,color 0.15s,box-shadow 0.15s}
+.export-btn:hover{background:#f4efe7;color:#1e1710;box-shadow:0 4px 14px rgba(90,60,20,0.10)}
+.footer-note{font-size:12px;color:#7a6a55;text-align:center;line-height:1.6;padding:4px 12px}
+.footer-note a{color:#8a5a16;font-weight:700;text-decoration:none}
+.footer-note a:hover{text-decoration:underline}
 .tooltip{position:fixed;pointer-events:none;z-index:100;background:#fffcf7;border:1px solid rgba(180,155,110,0.5);border-radius:12px;padding:10px 14px;font-size:12px;box-shadow:0 6px 20px rgba(90,60,20,0.14);display:none}
 svg .reg-path{cursor:pointer;transition:opacity 0.2s}
 svg .reg-path:hover{opacity:0.8}
 svg .mun-path{stroke:#fff;stroke-width:0.4;cursor:pointer;transition:all 0.15s}
 svg .mun-path:hover{opacity:0.75;stroke:#333;stroke-width:0.8}
 svg .mun-path.selected{stroke:#1e1710;stroke-width:2}
+@media (max-width:700px){
+  .export-btn{width:100%}
+  .table-heading{width:100%}
+}
 </style>
 </head>
 <body>
@@ -127,7 +137,11 @@ svg .mun-path.selected{stroke:#1e1710;stroke-width:2}
 
   <div class="table-card">
     <div class="table-top">
-      <h3>Turmas ARED 2027.1</h3>
+      <div class="table-heading">
+        <h3>Turmas ARED 2027.1</h3>
+        <button class="export-btn" onclick="exportFilteredToExcel()">Exportar Excel</button>
+        <button class="export-btn" onclick="exportFilteredToPdf()">Exportar PDF</button>
+      </div>
       <div class="table-controls">
         <div class="nivel-filter">
           <button class="nivel-btn" data-nivel="N3" onclick="toggleNivel('N3')">N3</button>
@@ -183,6 +197,10 @@ svg .mun-path.selected{stroke:#1e1710;stroke-width:2}
       <span id="pagination-info"></span>
       <div class="page-btns" id="page-btns"></div>
     </div>
+  </div>
+  <div class="footer-note">
+    Para solicitar correções, atualizações ou inclusões nos dados, entre em contato pelo e-mail
+    <a href="mailto:rafael.ruiz@cps.sp.gov.br">rafael.ruiz@cps.sp.gov.br</a>.
   </div>
 </div>
 <div class="tooltip" id="tip"></div>
@@ -489,6 +507,147 @@ function fmtOp(v){
 function fmtMod(v){
   if(!v||v===0) return '<span style="color:#a8987f">—</span>';
   return v;
+}
+
+var nivelExcelStyle={
+  N3:{bg:'#fdf0ee',fg:'#9f2b1a'},
+  N2:{bg:'#fdf5e6',fg:'#a06300'},
+  N1:{bg:'#eef5ef',fg:'#3a6b43'},
+  N0:{bg:'#eef1f4',fg:'#546070'}
+};
+
+function escapeHtml(value){
+  return String(value==null?'':value)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}
+
+function fmtExcelOp(value){
+  if(value===undefined||value===null||value==='') return '-';
+  var n=parseFloat(value);
+  if(isNaN(n)) return escapeHtml(value);
+  if(n===0) return '-';
+  return (n>0?'+':'')+(n*100).toFixed(1)+'%';
+}
+
+function fmtExcelMod(value){
+  return !value||value===0 ? '-' : escapeHtml(value);
+}
+
+function fmtExcelPercent(value){
+  var n=parseFloat(value);
+  if(isNaN(n)) return '-';
+  return (n>0?'+':'')+(n*100).toFixed(1)+'%';
+}
+
+function getActiveFiltersForExport(){
+  var filtros=[];
+  if(activeRegional) filtros.push('Regional: '+activeRegional);
+  if(activeMunicipio) filtros.push('Municipio: '+activeMunicipio);
+  var niveisSelecionados=Object.keys(activeNiveis).filter(function(k){return activeNiveis[k];});
+  if(niveisSelecionados.length) filtros.push('Niveis: '+niveisSelecionados.join(', '));
+  var busca=document.getElementById('search-input').value.trim();
+  if(busca) filtros.push('Busca: '+busca);
+  if(!filtros.length) filtros.push('Sem filtros adicionais');
+  return filtros;
+}
+
+function getExcelColorForOp(value){
+  var n=parseFloat(value);
+  if(isNaN(n)||n===0) return '#7a6a55';
+  return n>0 ? '#3a6b43' : '#9f2b1a';
+}
+
+function buildExcelRows(){
+  return filteredRows.map(function(r){
+    var nivelStyle=nivelExcelStyle[r.nivel]||nivelExcelStyle.N0;
+    var acumulado=parseFloat(r.acumulado);
+    var acumuladoColor=acumulado>0 ? '#3a6b43' : acumulado<0 ? '#9f2b1a' : '#7a6a55';
+    return '<tr>'
+      +'<td>'+escapeHtml(r.cod_loc)+'</td>'
+      +'<td>'+escapeHtml(r.regional)+'</td>'
+      +'<td>'+escapeHtml(r.municipio)+'</td>'
+      +'<td>'+escapeHtml(r.cod_sede)+'</td>'
+      +'<td>'+escapeHtml(r.cod_unid)+'</td>'
+      +'<td>'+escapeHtml(r.unidade)+'</td>'
+      +'<td>'+escapeHtml(r.curso)+'</td>'
+      +'<td>'+escapeHtml(r.periodo)+'</td>'
+      +'<td>'+escapeHtml(r.turma)+'</td>'
+      +'<td>'+escapeHtml(r.vagas)+'</td>'
+      +'<td>'+escapeHtml(r.inscritos)+'</td>'
+      +'<td>'+escapeHtml(r.demanda.toFixed(1))+'</td>'
+      +'<td>'+fmtExcelMod(r.mod1)+'</td>'
+      +'<td style="color:'+getExcelColorForOp(r.op1)+'">'+fmtExcelOp(r.op1)+'</td>'
+      +'<td>'+fmtExcelMod(r.mod2)+'</td>'
+      +'<td style="color:'+getExcelColorForOp(r.op2)+'">'+fmtExcelOp(r.op2)+'</td>'
+      +'<td>'+fmtExcelMod(r.mod3)+'</td>'
+      +'<td style="color:'+getExcelColorForOp(r.op3)+'">'+fmtExcelOp(r.op3)+'</td>'
+      +'<td>'+fmtExcelMod(r.mod4)+'</td>'
+      +'<td style="color:'+getExcelColorForOp(r.op4)+'">'+fmtExcelOp(r.op4)+'</td>'
+      +'<td style="color:'+acumuladoColor+';font-weight:700">'+fmtExcelPercent(r.acumulado)+'</td>'
+      +'<td>'+escapeHtml(r.diagnostico)+'</td>'
+      +'<td style="background:'+nivelStyle.bg+';color:'+nivelStyle.fg+';font-weight:700">'+escapeHtml(pillLabel[r.nivel]||r.nivel)+'</td>'
+      +'<td>'+escapeHtml(r.obs||'')+'</td>'
+      +'</tr>';
+  }).join('');
+}
+
+function buildExportDocument(){
+  var filtros=getActiveFiltersForExport();
+  var agora=new Date();
+  return {
+    dateStamp:agora.toISOString().slice(0,10),
+    html:'<!DOCTYPE html><html><head><meta charset="UTF-8"><style>'
+    +'body{font-family:Segoe UI,Arial,sans-serif;color:#1e1710;padding:18px;}'
+    +'h1{font-size:20px;margin:0 0 6px 0;}'
+    +'p{margin:0 0 8px 0;color:#7a6a55;font-size:12px;}'
+    +'.meta{margin:14px 0 16px 0;padding:10px 12px;background:#faf6ef;border:1px solid #d9c7aa;border-radius:8px;}'
+    +'.meta div{font-size:12px;line-height:1.6;}'
+    +'table{border-collapse:collapse;width:100%;font-size:11px;}'
+    +'th,td{border:1px solid #d9c7aa;padding:6px 8px;vertical-align:middle;white-space:nowrap;}'
+    +'th{background:#faf6ef;color:#1e1710;font-weight:700;}'
+    +'tr:nth-child(even) td{background:#fffcf7;}'
+    +'</style></head><body>'
+    +'<h1>Painel ARED 2027.1</h1>'
+    +'<p>Exportacao da tabela com os filtros atualmente aplicados.</p>'
+    +'<div class="meta"><div><strong>Gerado em:</strong> '+escapeHtml(agora.toLocaleString('pt-BR'))+'</div>'
+    +'<div><strong>Total de turmas:</strong> '+filteredRows.length+'</div>'
+    +'<div><strong>Filtros visiveis:</strong> '+escapeHtml(filtros.join(' | '))+'</div></div>'
+    +'<table><thead><tr>'
+    +'<th>Cod. Loc</th><th>Regional</th><th>Municipio</th><th>Cod. Sede</th><th>Cod. Unid</th><th>Unidade</th><th>Curso</th><th>Periodo</th><th>Turma</th><th>Vagas</th><th>Inscritos</th><th>Demanda</th><th>1o Mod</th><th>OP 1</th><th>2o Mod</th><th>OP 2</th><th>3o Mod</th><th>OP 3</th><th>4o Mod</th><th>OP 4</th><th>Acumulado</th><th>Diagnostico</th><th>Nivel</th><th>Obs</th>'
+    +'</tr></thead><tbody>'+buildExcelRows()+'</tbody></table></body></html>'
+  };
+}
+
+function exportFilteredToExcel(){
+  var exportDoc=buildExportDocument();
+  var dataArquivo=exportDoc.dateStamp;
+  var html=exportDoc.html;
+  var blob=new Blob(['\ufeff',html],{type:'application/vnd.ms-excel;charset=utf-8;'});
+  var url=URL.createObjectURL(blob);
+  var link=document.createElement('a');
+  link.href=url;
+  link.download='ared2027_filtro_'+dataArquivo+'.xls';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+function exportFilteredToPdf(){
+  var exportDoc=buildExportDocument();
+  var printWindow=window.open('','_blank','width=1200,height=800');
+  if(!printWindow) return;
+  printWindow.document.open();
+  printWindow.document.write(exportDoc.html);
+  printWindow.document.close();
+  printWindow.focus();
+  setTimeout(function(){
+    printWindow.print();
+  },250);
 }
 
 function renderTable(){
