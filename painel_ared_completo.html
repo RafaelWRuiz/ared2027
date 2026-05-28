@@ -556,7 +556,8 @@ function applyFilters(){
     if(activeMunicipio && r.municipio!==activeMunicipio) return false;
     if(niveisAtivos.length>0 && niveisAtivos.indexOf(r.nivel)<0) return false;
     if(search && r.unidade.toLowerCase().indexOf(search)<0 && r.curso.toLowerCase().indexOf(search)<0
-       && r.cod_loc.toLowerCase().indexOf(search)<0) return false;
+       && r.cod_loc.toLowerCase().indexOf(search)<0 && r.municipio.toLowerCase().indexOf(search)<0
+       && r.cod_unid.toLowerCase().indexOf(search)<0) return false;
     return true;
   });
 
