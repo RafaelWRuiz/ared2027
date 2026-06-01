@@ -197,6 +197,10 @@ svg .mun-path{stroke:#fff;stroke-width:0.4;cursor:pointer;transition:all 0.15s}
 svg .mun-path:hover{opacity:0.75;stroke:#333;stroke-width:0.8}
 svg .mun-path.selected{stroke:#1e1710;stroke-width:2}
 svg .mun-path.no-data{cursor:default}
+svg .unit-dot{cursor:pointer;stroke:#fffcf7;stroke-width:1.5;filter:drop-shadow(0 1px 2px rgba(30,23,16,0.25));transition:opacity 0.15s}
+svg .unit-dot:hover{opacity:0.8}
+svg .unit-dot.selected{stroke:#1e1710;stroke-width:2}
+svg .unit-label{pointer-events:none;font-size:7px;font-weight:800;fill:#fffcf7;text-anchor:middle;dominant-baseline:central}
 @media (max-width:950px){
   .header{grid-template-columns:1fr;padding:16px}
   .map-layout{grid-template-columns:1fr}
@@ -411,6 +415,7 @@ const PAGE_SIZE = 30;
 
 var activeRegional = null;
 var activeMunicipio = null;
+var activeUnidade = null;
 var activeDiagnostico = null;
 var activeNiveis = {};
 var currentPage = 1;
@@ -422,6 +427,104 @@ var STORAGE_KEY = 'ared-table-columns-v1';
 var dragCol = null;
 var resizingCol = null;
 var analysisObserver = null;
+function normText(value){
+  return (value||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+}
+var SAO_PAULO_UNIT_LOCATIONS = [
+  {match:'ceu casa blanca', lon:-46.759, lat:-23.672},
+  {match:'ceu campo limpo', lon:-46.758, lat:-23.644},
+  {match:'ceu cantos do amanhecer', lon:-46.752, lat:-23.666},
+  {match:'ceu capao redondo', lon:-46.779, lat:-23.669},
+  {match:'ceu tres lagos', lon:-46.704, lat:-23.731},
+  {match:'ceu feitico da vila', lon:-46.775, lat:-23.651},
+  {match:'ceu guarapiranga', lon:-46.733, lat:-23.683},
+  {match:'ceu vila do sol', lon:-46.741, lat:-23.701},
+  {match:'ceu parelheiros', lon:-46.725, lat:-23.824},
+  {match:'ceu cidade dutra', lon:-46.697, lat:-23.713},
+  {match:'ceu navegantes', lon:-46.695, lat:-23.755},
+  {match:'ceu vila rubi', lon:-46.690, lat:-23.704},
+  {match:'ceu alvarenga', lon:-46.641, lat:-23.753},
+  {match:'ceu butanta', lon:-46.727, lat:-23.571},
+  {match:'ceu jaguare', lon:-46.749, lat:-23.548},
+  {match:'ceu perus', lon:-46.752, lat:-23.408},
+  {match:'ceu jacana', lon:-46.580, lat:-23.462},
+  {match:'derville allegretti', lon:-46.606, lat:-23.492},
+  {match:'ceu parque bristol', lon:-46.618, lat:-23.650},
+  {match:'ceu aricanduva', lon:-46.522, lat:-23.560},
+  {match:'ceu quinta do sol', lon:-46.506, lat:-23.527},
+  {match:'esther frankel', lon:-46.498, lat:-23.520},
+  {match:'ceu parque veredas', lon:-46.446, lat:-23.532},
+  {match:'ceu vila curuca', lon:-46.418, lat:-23.513},
+  {match:'ceu lajeado', lon:-46.410, lat:-23.535},
+  {match:'ceu azul da cor do mar', lon:-46.409, lat:-23.549},
+  {match:'ceu parque sao carlos', lon:-46.399, lat:-23.501},
+  {match:'ceu sao miguel', lon:-46.438, lat:-23.497},
+  {match:'ceu agua azul', lon:-46.401, lat:-23.577},
+  {match:'ceu alto alegre', lon:-46.397, lat:-23.590},
+  {match:'ceu sao mateus', lon:-46.478, lat:-23.611},
+  {match:'ceu sao rafael', lon:-46.463, lat:-23.632},
+  {match:'ceu sapopemba', lon:-46.506, lat:-23.609},
+  {match:'ee presidente roosevelt', lon:-46.638, lat:-23.583},
+  {match:'ee professor roldao', lon:-46.614, lat:-23.578},
+  {match:'ee amadeu amaral', lon:-46.611, lat:-23.610},
+  {match:'ee brasilio machado', lon:-46.622, lat:-23.591},
+  {match:'fatec zona leste', lon:-46.470, lat:-23.527},
+  {match:'fatec de itaquera', lon:-46.455, lat:-23.536},
+  {match:'fatec do ipiranga', lon:-46.599, lat:-23.598},
+  {match:'abdias do nascimento', lon:-46.743, lat:-23.675},
+  {match:'albert einstein', lon:-46.648, lat:-23.494},
+  {match:'carlos de campos', lon:-46.625, lat:-23.541},
+  {match:'carolina carinhato sampaio', lon:-46.760, lat:-23.666},
+  {match:'cepam', lon:-46.708, lat:-23.561},
+  {match:'de artes', lon:-46.619, lat:-23.515},
+  {match:'cidade tiradentes', lon:-46.399, lat:-23.586},
+  {match:'esportes curt walter', lon:-46.633, lat:-23.512},
+  {match:'guaianazes', lon:-46.407, lat:-23.543},
+  {match:'heliopolis', lon:-46.594, lat:-23.601},
+  {match:'itaquera ii', lon:-46.451, lat:-23.535},
+  {match:'de itaquera', lon:-46.455, lat:-23.536},
+  {match:'de sao paulo', lon:-46.638, lat:-23.532},
+  {match:'sapopemba', lon:-46.506, lat:-23.609},
+  {match:'tiquatira', lon:-46.535, lat:-23.520},
+  {match:'vila formosa', lon:-46.536, lat:-23.557},
+  {match:'maria augusta saraiva', lon:-46.651, lat:-23.548},
+  {match:'getulio vargas', lon:-46.612, lat:-23.563},
+  {match:'gildo marcal', lon:-46.705, lat:-23.455},
+  {match:'guaracy silveira', lon:-46.702, lat:-23.551},
+  {match:'irma agostina', lon:-46.680, lat:-23.711},
+  {match:'jaragua', lon:-46.740, lat:-23.456},
+  {match:'jardim angela', lon:-46.768, lat:-23.685},
+  {match:'jornalista roberto marinho', lon:-46.704, lat:-23.632},
+  {match:'jose rocha mendes', lon:-46.612, lat:-23.616},
+  {match:'juscelino kubitschek', lon:-46.618, lat:-23.635},
+  {match:'mandaqui', lon:-46.628, lat:-23.472},
+  {match:'martin luther king', lon:-46.549, lat:-23.544},
+  {match:'parque belem', lon:-46.545, lat:-23.539},
+  {match:'parque da juventude', lon:-46.625, lat:-23.509},
+  {match:'paulistano', lon:-46.704, lat:-23.472},
+  {match:'adhemar batista', lon:-46.534, lat:-23.566},
+  {match:'andre bogasian', lon:-46.747, lat:-23.545},
+  {match:'aprigio gonzaga', lon:-46.505, lat:-23.525},
+  {match:'basilides de godoy', lon:-46.715, lat:-23.529},
+  {match:'camargo aranha', lon:-46.607, lat:-23.566},
+  {match:'horacio augusto', lon:-46.566, lat:-23.488},
+  {match:'doroti quiomi', lon:-46.682, lat:-23.590},
+  {match:'raposo tavares', lon:-46.771, lat:-23.585},
+  {match:'santa ifigenia', lon:-46.637, lat:-23.537},
+  {match:'sao mateus', lon:-46.478, lat:-23.611},
+  {match:'sebrae', lon:-46.641, lat:-23.550},
+  {match:'takashi morita', lon:-46.696, lat:-23.754},
+  {match:'tereza aparecida', lon:-46.460, lat:-23.535},
+  {match:'uirapuru', lon:-46.720, lat:-23.574},
+  {match:'zona leste', lon:-46.470, lat:-23.527}
+];
+var SAO_PAULO_FALLBACK_LOCATIONS = [
+  [-46.754,-23.432],[-46.712,-23.478],[-46.642,-23.486],[-46.579,-23.476],
+  [-46.724,-23.536],[-46.662,-23.548],[-46.611,-23.560],[-46.548,-23.546],
+  [-46.492,-23.531],[-46.431,-23.520],[-46.396,-23.550],[-46.405,-23.590],
+  [-46.502,-23.612],[-46.585,-23.625],[-46.660,-23.646],[-46.735,-23.684],
+  [-46.697,-23.735],[-46.616,-23.704]
+];
 function heatClassForDemand(v){
   if(v>=1.5) return 'heat-green';
   if(v>=1) return 'heat-yellow';
@@ -700,7 +803,7 @@ REGIONAIS.features.forEach(function(f) {
 });
 
 function zoomToRegional(regional,feature,cor){
-  activeRegional=regional; activeMunicipio=null;
+  activeRegional=regional; activeMunicipio=null; activeUnidade=null;
   activeDiagnostico=null;
   setNiveis(['N1','N2','N3']);
   tip.style.display='none'; btnVoltar.style.display='block';
@@ -716,6 +819,23 @@ function zoomToRegional(regional,feature,cor){
   if(munData){
     var munProj = d3.geoMercator().fitExtent([[30,30],[W-30,H-30]],munData);
     var munPathFn = d3.geoPath(munProj);
+    function resetMunicipioFocus(){
+      munGroup.transition().duration(520).ease(d3.easeCubicOut).attr('transform',null);
+    }
+    function focusMunicipioByName(nome){
+      var mf=munData.features.find(function(x){return x.properties.name===nome;});
+      if(!mf) return;
+      var b=munPathFn.bounds(mf);
+      var dx=b[1][0]-b[0][0], dy=b[1][1]-b[0][1];
+      if(!dx || !dy) return;
+      var cx=(b[0][0]+b[1][0])/2;
+      var cy=(b[0][1]+b[1][1])/2;
+      var scale=Math.min(2.55,Math.max(1.35,Math.min((W*0.44)/dx,(H*0.44)/dy)));
+      var tx=W/2-scale*cx;
+      var ty=H/2-scale*cy;
+      munGroup.raise().transition().duration(620).ease(d3.easeCubicOut)
+        .attr('transform','translate('+tx+','+ty+') scale('+scale+')');
+    }
     var munStats={};
     ALL_ROWS.forEach(function(r){
       if(r.regional!==regional || !r.municipio) return;
@@ -748,15 +868,24 @@ function zoomToRegional(regional,feature,cor){
         if(!munStats[mun]) return;
         if(activeMunicipio===mun){
           activeMunicipio=null;
+          activeUnidade=null;
+          resetMunicipioFocus();
           munGroup.selectAll('.mun-path').classed('selected',false)
             .transition().duration(200).attr('opacity',1);
+          munGroup.selectAll('.unit-dot').classed('selected',false);
+          munGroup.selectAll('.unit-marker').transition().duration(200).attr('opacity',1);
           updateFilterChip('regional',regional);
         } else {
           activeMunicipio=mun;
+          activeUnidade=null;
+          focusMunicipioByName(mun);
           munGroup.selectAll('.mun-path')
             .classed('selected',function(dd){return dd.properties.name===mun;})
             .transition().duration(200)
             .attr('opacity',function(dd){return dd.properties.name===mun?1:0.22;});
+          munGroup.selectAll('.unit-dot').classed('selected',false);
+          munGroup.selectAll('.unit-marker').transition().duration(200)
+            .attr('opacity',function(){return this.getAttribute('data-mun')===mun?1:0.18;});
           updateFilterChip('municipio',mun);
         }
         applyFilters();
@@ -778,25 +907,105 @@ function zoomToRegional(regional,feature,cor){
           .transition().duration(600).delay(300).attr('opacity',1);
       });
     }
+    renderUnitMarkers(regional,munData,munPathFn,munProj,cor,focusMunicipioByName);
   }
   applyFilters(); updateFilterChip('regional',regional);
+}
+
+function getUnitsForMunicipio(regional,municipio){
+  var map={};
+  ALL_ROWS.forEach(function(r){
+    if(r.regional!==regional || r.municipio!==municipio || !r.unidade) return;
+    if(!map[r.unidade]) map[r.unidade]=[];
+    map[r.unidade].push(r);
+  });
+  return Object.keys(map).sort(function(a,b){return a.localeCompare(b,'pt');}).map(function(nome){
+    return {nome:nome,rows:map[nome]};
+  });
+}
+
+function getApproxUnitPoint(unitName,municipio,idx,munProj){
+  if(normText(municipio)!=='sao paulo') return null;
+  var key=normText(unitName);
+  var found=SAO_PAULO_UNIT_LOCATIONS.find(function(item){return key.indexOf(item.match)>-1;});
+  var lonLat=found ? [found.lon,found.lat] : SAO_PAULO_FALLBACK_LOCATIONS[idx%SAO_PAULO_FALLBACK_LOCATIONS.length];
+  var point=munProj(lonLat);
+  return point && isFinite(point[0]) && isFinite(point[1]) ? point : null;
+}
+
+function renderUnitMarkers(regional,munData,munPathFn,munProj,cor,focusMunicipioByName){
+  munData.features.forEach(function(mf){
+    var municipio=mf.properties.name;
+    var units=getUnitsForMunicipio(regional,municipio);
+    if(units.length<=1) return;
+    var c=munPathFn.centroid(mf);
+    if(!c||isNaN(c[0])) return;
+    var radius=Math.min(18,8+units.length*1.8);
+    units.forEach(function(unit,idx){
+      var angle=(Math.PI*2/units.length)*idx-Math.PI/2;
+      var approxPoint=getApproxUnitPoint(unit.nome,municipio,idx,munProj);
+      var x=approxPoint ? approxPoint[0] : c[0]+Math.cos(angle)*radius;
+      var y=approxPoint ? approxPoint[1] : c[1]+Math.sin(angle)*radius;
+      var g=munGroup.append('g')
+        .attr('class','unit-marker')
+        .attr('data-mun',municipio)
+        .attr('data-unit',unit.nome)
+        .attr('transform','translate('+x+','+y+')')
+        .attr('opacity',0);
+      g.append('circle')
+        .attr('class','unit-dot')
+        .attr('data-mun',municipio)
+        .attr('data-unit',unit.nome)
+        .attr('r',5.2)
+        .attr('fill',cor);
+      g.append('text')
+        .attr('class','unit-label')
+        .attr('y',0.4)
+        .text(idx+1);
+      g.on('mousemove',function(event){
+          tip.style.display='block';
+          tip.style.left=(event.clientX+14)+'px'; tip.style.top=(event.clientY-8)+'px';
+          tip.innerHTML=renderDiagTooltip(unit.nome,municipio,unit.rows,'Clique para filtrar a unidade');
+        })
+        .on('mouseleave',function(){tip.style.display='none';})
+        .on('click',function(event){
+          event.stopPropagation();
+          activeRegional=regional;
+          activeMunicipio=municipio;
+          activeUnidade=unit.nome;
+          focusMunicipioByName(municipio);
+          munGroup.selectAll('.mun-path')
+            .classed('selected',function(dd){return dd.properties.name===municipio;})
+            .transition().duration(200)
+            .attr('opacity',function(dd){return dd.properties.name===municipio?1:0.18;});
+          munGroup.selectAll('.unit-dot')
+            .classed('selected',function(){return this.getAttribute('data-unit')===unit.nome;});
+          munGroup.selectAll('.unit-marker')
+            .transition().duration(200)
+            .attr('opacity',function(){return this.getAttribute('data-unit')===unit.nome?1:(this.getAttribute('data-mun')===municipio?0.35:0.12);});
+          updateFilterChip('unidade',unit.nome);
+          applyFilters();
+        });
+      g.transition().duration(420).delay(250+idx*45).attr('opacity',1);
+    });
+  });
 }
 
 function updateFilterChip(type,value){
   var bar=document.getElementById('filter-bar');
   var label=document.getElementById('active-filter-label');
   bar.style.display='flex';
-  label.textContent=(type==='municipio'?'Município: ':'Regional: ')+value;
+  label.textContent=(type==='unidade'?'Unidade: ':(type==='municipio'?'Município: ':'Regional: '))+value;
 }
 
 function resetZoom(){
-  activeRegional=null; activeMunicipio=null;
+  activeRegional=null; activeMunicipio=null; activeUnidade=null;
   activeDiagnostico=null;
   setNiveis([]);
   tip.style.display='none'; btnVoltar.style.display='none';
   document.getElementById('filter-bar').style.display='none';
   document.getElementById('search-input').value='';
-  munGroup.selectAll('*').remove(); munGroup.attr('opacity',0);
+  munGroup.selectAll('*').remove(); munGroup.attr('opacity',0).attr('transform',null);
   mapGroup.transition().duration(500).attr('opacity',1);
   mapGroup.selectAll('.reg-path').transition().duration(400).attr('opacity',1);
   labelGroup.transition().duration(400).attr('opacity',1);
@@ -825,6 +1034,7 @@ function applyFilters(){
   filteredRows=ALL_ROWS.filter(function(r){
     if(activeRegional && r.regional!==activeRegional) return false;
     if(activeMunicipio && r.municipio!==activeMunicipio) return false;
+    if(activeUnidade && r.unidade!==activeUnidade) return false;
     if(activeDiagnostico && r.diagnostico!==activeDiagnostico) return false;
     if(niveisAtivos.length>0 && niveisAtivos.indexOf(getNivelKey(r))<0) return false;
     if(search && r.unidade.toLowerCase().indexOf(search)<0 && r.curso.toLowerCase().indexOf(search)<0
@@ -855,6 +1065,8 @@ function updateHeaderAlert(){
   var sel=document.getElementById('selected-line');
   if(activeDiagnostico){
     sel.innerHTML='Exibindo apenas cursos com <b>'+activeDiagnostico+'</b>';
+  } else if(activeUnidade){
+    sel.innerHTML='Unidade selecionada: <b>'+activeUnidade+'</b> · '+activeMunicipio;
   } else if(activeMunicipio){
     sel.innerHTML='Município selecionado: <b>'+activeMunicipio+'</b> · '+activeRegional;
   } else if(activeRegional){
@@ -1362,6 +1574,7 @@ function getActiveFiltersForExport(){
   var filtros=[];
   if(activeRegional) filtros.push('Regional: '+activeRegional);
   if(activeMunicipio) filtros.push('Municipio: '+activeMunicipio);
+  if(activeUnidade) filtros.push('Unidade: '+activeUnidade);
   var niveisSelecionados=Object.keys(activeNiveis).filter(function(k){return activeNiveis[k];});
   if(niveisSelecionados.length) filtros.push('Niveis: '+niveisSelecionados.join(', '));
   var busca=document.getElementById('search-input').value.trim();
@@ -1411,9 +1624,163 @@ function buildExcelRows(){
   }).join('');
 }
 
-function buildExportDocument(){
+function getExportSummary(){
+  var total=filteredRows.length;
+  var diag={};
+  DIAGNOSTICO_CARDS.forEach(function(card){
+    diag[card.label]=filteredRows.filter(function(r){return r.diagnostico===card.label;}).length;
+  });
+  return {total:total,diag:diag};
+}
+
+function getMapSvgForExport(){
+  var svgEl=document.querySelector('#map svg');
+  if(!svgEl) return '';
+  var clone=svgEl.cloneNode(true);
+  clone.setAttribute('width','100%');
+  clone.setAttribute('height','100%');
+  clone.setAttribute('preserveAspectRatio','xMidYMid meet');
+  clone.querySelectorAll('.mun-path.no-data').forEach(function(el){el.setAttribute('opacity','0.1');});
+  return new XMLSerializer().serializeToString(clone);
+}
+
+function buildPdfDiagBars(summary){
+  return DIAGNOSTICO_CARDS.map(function(card){
+    var count=summary.diag[card.label]||0;
+    var pct=summary.total?count/summary.total:0;
+    return '<div class="pdf-bar-row"><div class="pdf-bar-label">'+escapeHtml(card.label.replace(' Nível de Evasão','').replace('Sem Evasão','Sem evasão'))+'</div>'
+      +'<div class="pdf-bar-track"><div class="pdf-bar-fill" style="width:'+Math.max(2,Math.round(pct*100))+'%;background:'+diagnosticoColor(card.label)+'"></div></div>'
+      +'<div class="pdf-bar-value">'+count+' · '+pctText(pct)+'</div></div>';
+  }).join('');
+}
+
+function buildPdfTopRows(rows,keyFn,title){
+  var groups=aggregateBy(rows,keyFn)
+    .filter(function(g){return g.alto>0;})
+    .sort(function(a,b){return (b.alto-a.alto) || (b.alto/b.total-a.alto/a.total) || a.label.localeCompare(b.label,'pt');})
+    .slice(0,10);
+  if(!groups.length) return '<h2>'+escapeHtml(title)+'</h2><div class="pdf-empty">Nenhum alto nível no filtro atual.</div>';
+  var max=Math.max.apply(null,groups.map(function(g){return g.alto;}).concat([1]));
+  return '<h2>'+escapeHtml(title)+'</h2>'+groups.map(function(g){
+    var pct=g.total?g.alto/g.total:0;
+    return '<div class="pdf-rank-row"><div class="pdf-rank-label">'+escapeHtml(g.label)+'</div>'
+      +'<div class="pdf-rank-track"><div class="pdf-rank-fill" style="width:'+Math.max(2,Math.round(g.alto/max*100))+'%;background-color:#9f2b1a"></div></div>'
+      +'<div class="pdf-rank-value">'+g.alto+'/'+g.total+' · '+pctText(pct)+'</div></div>';
+  }).join('');
+}
+
+function buildPdfStageChart(rows){
+  var stages=[
+    {key:'op1',label:'OP 1'},
+    {key:'op2',label:'OP 2'},
+    {key:'op3',label:'OP 3'},
+    {key:'op4',label:'OP 4'},
+    {key:'acumulado',label:'Acum.'}
+  ].map(function(stage){
+    var vals=rows.map(function(r){return rateNumber(r[stage.key]);}).filter(function(v){return v!==null;});
+    var avg=vals.length?vals.reduce(function(a,b){return a+b;},0)/vals.length:0;
+    return {label:stage.label,avg:avg};
+  });
+  var max=Math.max.apply(null,stages.map(function(s){return Math.abs(s.avg);}).concat([0.01]));
+  return '<div class="pdf-stage-chart">'+stages.map(function(s){
+    var size=Math.max(2,Math.round(Math.abs(s.avg)/max*100));
+    var color=s.avg<=-0.35?'#9f2b1a':(s.avg<=-0.15?'#c4880a':(s.avg<0?'#3a6b43':'#546070'));
+    return '<div class="pdf-stage-item"><div class="pdf-stage-value">'+pctText(s.avg)+'</div>'
+      +'<div class="pdf-stage-wrap"><div class="pdf-stage-bar" style="height:'+size+'%;background-color:'+color+'"></div></div>'
+      +'<div class="pdf-stage-label">'+s.label+'</div></div>';
+  }).join('')+'</div>';
+}
+
+function buildPdfScatter(rows){
+  var data=rows.filter(function(r){return isFinite(r.demanda) && rateNumber(r.acumulado)!==null;});
+  if(!data.length) return '<div class="pdf-empty">Sem dados para cruzar demanda e evasão.</div>';
+  var maxX=Math.max.apply(null,data.map(function(r){return r.demanda;}).concat([1]));
+  var ys=data.map(function(r){return rateNumber(r.acumulado);});
+  var minY=Math.min.apply(null,ys.concat([-0.05]));
+  var maxY=Math.max.apply(null,ys.concat([0]));
+  if(maxY===minY) maxY=minY+0.01;
+  return '<div class="pdf-scatter">'
+    +'<div class="pdf-scatter-y">Evasão acumulada</div><div class="pdf-scatter-x">Demanda</div>'
+    +'<div class="pdf-scatter-tick pdf-x0">0</div><div class="pdf-scatter-tick pdf-x1">'+maxX.toFixed(1).replace('.',',')+'</div>'
+    +'<div class="pdf-scatter-tick pdf-y0">'+pctText(minY)+'</div><div class="pdf-scatter-tick pdf-y1">'+pctText(maxY)+'</div>'
+    +'<div class="pdf-scatter-plot">'
+    +data.map(function(r){
+      var y=rateNumber(r.acumulado);
+      var left=(r.demanda/maxX)*100;
+      var bottom=((y-minY)/(maxY-minY))*100;
+      return '<span class="pdf-point" style="left:'+left+'%;bottom:'+bottom+'%;background:'+diagnosticoColor(r.diagnostico)+'"></span>';
+    }).join('')
+    +'</div></div>';
+}
+
+function buildPdfDocument(agora,filtros){
+  var summary=getExportSummary();
+  var mapSvg=getMapSvgForExport();
+  var topTitle=activeMunicipio?'Top cursos no município':(activeRegional?'Top municípios da regional':'Top regionais em alto nível');
+  var topKey=activeMunicipio?function(r){return r.curso;}:(activeRegional?function(r){return r.municipio;}:function(r){return r.regional;});
+  return '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Relatório ARED 2027.1</title><style>'
+    +'@page{size:A4 portrait;margin:12mm}@page tablePage{size:A4 landscape;margin:7mm}'
+    +'*{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}body{font-family:Segoe UI,Arial,sans-serif;color:#1e1710;margin:0;background:#fff}'
+    +'.pdf-page{page-break-after:always;min-height:270mm;padding:5mm}.pdf-table-page{page:tablePage;page-break-after:always;padding:0}.pdf-last{page-break-after:auto}'
+    +'.pdf-cover{display:grid;grid-template-columns:1.02fr 1fr;grid-template-rows:auto 1fr;gap:6mm 9mm;align-items:stretch}.pdf-cover-head{grid-column:1/-1;display:flex;align-items:flex-end;justify-content:space-between;border-bottom:1px solid #d9c7aa;padding-bottom:5mm}.pdf-eyebrow{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#a8987f;font-weight:800;margin-bottom:3mm}'
+    +'h1{font-size:28px;line-height:1.05;margin:0}h2{font-size:13px;letter-spacing:1.4px;text-transform:uppercase;color:#a8987f;margin:0 0 4mm 0}.pdf-sub{font-size:12px;color:#7a6a55;line-height:1.5;margin:0}.pdf-cover-date{font-size:10px;color:#7a6a55;text-align:right;line-height:1.5}'
+    +'.pdf-meta{border:1px solid #d9c7aa;border-radius:10px;background-color:#faf6ef;padding:5mm;font-size:11px;line-height:1.7;margin-bottom:5mm}.pdf-metrics{display:grid;grid-template-columns:repeat(2,1fr);gap:4mm;margin-bottom:5mm}.pdf-metric{border:1px solid #d9c7aa;border-radius:9px;padding:4mm;background-color:#fffcf7}.pdf-metric b{font-size:24px;display:block;line-height:1}.pdf-metric span{font-size:10px;color:#7a6a55;line-height:1.35;display:block;margin-top:2mm}'
+    +'.pdf-map-card{border:1px solid #d9c7aa;border-radius:12px;background-color:#faf6ef;padding:5mm;display:flex;flex-direction:column;min-height:185mm}.pdf-map-title{font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:#a8987f;font-weight:800;margin-bottom:4mm}.pdf-map{flex:1;border-radius:10px;background-color:#f1ece3;padding:2mm;overflow:hidden;display:flex;align-items:center;justify-content:center}.pdf-map svg{width:100%;height:100%}.pdf-chart-card{border:1px solid #d9c7aa;border-radius:10px;background-color:#faf6ef;padding:5mm;margin-bottom:6mm;break-inside:avoid}.pdf-grid{display:grid;grid-template-columns:1fr 1fr;gap:6mm}.pdf-wide{grid-column:1/-1}'
+    +'.pdf-bar-row,.pdf-rank-row{display:grid;grid-template-columns:40mm 1fr 28mm;gap:4mm;align-items:center;margin:3mm 0;font-size:10px}.pdf-rank-row{grid-template-columns:52mm 1fr 32mm}.pdf-bar-label,.pdf-rank-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pdf-bar-track,.pdf-rank-track{height:3mm;background:#eee7dc;border-radius:99px;overflow:hidden}.pdf-bar-fill,.pdf-rank-fill{height:100%;border-radius:99px}.pdf-rank-fill{background:#9f2b1a}.pdf-bar-value,.pdf-rank-value{text-align:right;color:#7a6a55;font-variant-numeric:tabular-nums}'
+    +'.pdf-stage-chart{display:grid;grid-template-columns:repeat(5,1fr);gap:3mm;height:70mm}.pdf-stage-item{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:2mm}.pdf-stage-wrap{height:45mm;width:100%;background-color:#f1ece3;border-radius:8px;padding:2mm;display:flex;align-items:flex-end;justify-content:center}.pdf-stage-bar{width:70%;border-radius:5px 5px 1px 1px;min-height:1.2mm}.pdf-stage-value{font-size:11px;font-weight:800}.pdf-stage-label{font-size:9px;color:#7a6a55}'
+    +'.pdf-scatter{position:relative;height:128mm;border:1px solid #d9c7aa;border-radius:9px;background:#fffcf7;padding:10mm 9mm 14mm 18mm}.pdf-scatter-plot{position:relative;width:100%;height:100%;border-left:1px solid #7a6a55;border-bottom:1px solid #7a6a55}.pdf-point{position:absolute;width:2mm;height:2mm;border-radius:50%;border:0.2mm solid rgba(30,23,16,.35);transform:translate(-50%,50%)}.pdf-scatter-x,.pdf-scatter-y,.pdf-scatter-tick{position:absolute;font-size:9px;color:#7a6a55}.pdf-scatter-x{right:9mm;bottom:4mm}.pdf-scatter-y{left:3mm;top:43mm;writing-mode:vertical-rl;transform:rotate(180deg)}.pdf-x0{left:17mm;bottom:5mm}.pdf-x1{right:32mm;bottom:5mm}.pdf-y0{left:5mm;bottom:13mm}.pdf-y1{left:5mm;top:9mm}.pdf-empty{font-size:11px;color:#a8987f;text-align:center;padding:8mm}'
+    +'.pdf-table-title{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:3mm}.pdf-table-title h2{margin:0;color:#1e1710;font-size:14px;text-transform:none;letter-spacing:0}.pdf-table-title span{font-size:9px;color:#7a6a55}'
+    +'.pdf-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:5.2px;line-height:1.1}.pdf-table th,.pdf-table td{border:.2mm solid #d9c7aa;padding:1mm .7mm;vertical-align:top;overflow:hidden;text-overflow:ellipsis}.pdf-table th{background:#faf6ef;font-weight:800}.pdf-table td{white-space:normal}.pdf-table .nowrap{white-space:nowrap}.pdf-table .small{font-size:4.8px}'
+    +'</style></head><body>'
+    +'<section class="pdf-page pdf-cover"><div class="pdf-cover-head"><div><div class="pdf-eyebrow">Relatório ARED 2027.1</div><h1>Painel de Evasão e Demanda</h1></div><div class="pdf-cover-date">Gerado em<br><strong>'+escapeHtml(agora.toLocaleString('pt-BR'))+'</strong></div></div>'
+    +'<div><div class="pdf-sub">Resumo da visualização atual, com filtros aplicados no painel no momento da exportação.</div><div class="pdf-meta"><div><strong>Filtros:</strong> '+escapeHtml(filtros.join(' | '))+'</div><div><strong>Total de turmas:</strong> '+summary.total+'</div></div>'
+    +'<div class="pdf-metrics">'+DIAGNOSTICO_CARDS.map(function(card){var c=summary.diag[card.label]||0;return '<div class="pdf-metric"><b style="color:'+diagnosticoColor(card.label)+'">'+c+'</b><span>'+escapeHtml(card.label)+'<br>'+fmtPctValue(c,summary.total)+'</span></div>';}).join('')+'</div>'
+    +'<div class="pdf-chart-card"><h2>Diagnóstico</h2>'+buildPdfDiagBars(summary)+'</div></div><div class="pdf-map-card"><div class="pdf-map-title">Mapa do filtro</div><div class="pdf-map">'+mapSvg+'</div></div></section>'
+    +'<section class="pdf-table-page"><div class="pdf-table-title"><h2>Tabela completa do filtro</h2><span>'+summary.total+' turmas · colunas em página paisagem</span></div><table class="pdf-table"><thead><tr>'
+    +'<th style="width:18mm">Cod. Loc</th><th style="width:20mm">Regional</th><th style="width:17mm">Munic.</th><th style="width:10mm">Sede</th><th style="width:12mm">Unid.</th><th style="width:32mm">Unidade</th><th style="width:30mm">Curso</th><th style="width:15mm">Periodo</th><th style="width:10mm">Turma</th><th style="width:8mm">Vag.</th><th style="width:9mm">Insc.</th><th style="width:11mm">Dem.</th><th style="width:8mm">1o</th><th style="width:9mm">OP1</th><th style="width:8mm">2o</th><th style="width:9mm">OP2</th><th style="width:8mm">3o</th><th style="width:9mm">OP3</th><th style="width:8mm">4o</th><th style="width:9mm">OP4</th><th style="width:12mm">Acum.</th><th style="width:21mm">Diagn.</th><th style="width:9mm">Niv.</th><th style="width:12mm">Obs</th>'
+    +'</tr></thead><tbody>'+buildPdfTableRows()+'</tbody></table></section>'
+    +'<section class="pdf-page"><div class="pdf-grid"><div class="pdf-chart-card"><h2>Perda por etapa</h2>'+buildPdfStageChart(filteredRows)+'</div><div class="pdf-chart-card">'+buildPdfTopRows(filteredRows,topKey,topTitle)+'</div><div class="pdf-chart-card pdf-wide">'+buildPdfTopRows(filteredRows,function(r){return r.curso;},'Cursos em atenção')+'</div></div></section>'
+    +'<section class="pdf-page pdf-last"><div class="pdf-chart-card pdf-wide"><h2>Demanda x evasão acumulada</h2><div class="pdf-sub">Cada ponto representa uma turma. Mais à direita significa maior demanda; mais acima significa maior perda acumulada. As cores seguem o diagnóstico.</div>'+buildPdfScatter(filteredRows)+'</div></section>'
+    +'</body></html>';
+}
+
+function buildPdfTableRows(){
+  return filteredRows.map(function(r){
+    var nivelKey=getNivelKey(r);
+    return '<tr>'
+      +'<td class="small">'+escapeHtml(r.cod_loc)+'</td>'
+      +'<td>'+escapeHtml(r.regional)+'</td>'
+      +'<td>'+escapeHtml(r.municipio)+'</td>'
+      +'<td class="nowrap">'+escapeHtml(r.cod_sede)+'</td>'
+      +'<td class="nowrap">'+escapeHtml(r.cod_unid)+'</td>'
+      +'<td>'+escapeHtml(r.unidade)+'</td>'
+      +'<td>'+escapeHtml(r.curso)+'</td>'
+      +'<td>'+escapeHtml(r.periodo)+'</td>'
+      +'<td class="nowrap">'+escapeHtml(r.turma)+'</td>'
+      +'<td class="nowrap">'+escapeHtml(r.vagas)+'</td>'
+      +'<td class="nowrap">'+escapeHtml(r.inscritos)+'</td>'
+      +'<td class="nowrap">'+escapeHtml(Number(r.demanda).toFixed(2).replace('.',','))+'</td>'
+      +'<td class="nowrap">'+fmtExcelMod(r.mod1)+'</td><td class="nowrap">'+fmtExcelOp(r.op1)+'</td>'
+      +'<td class="nowrap">'+fmtExcelMod(r.mod2)+'</td><td class="nowrap">'+fmtExcelOp(r.op2)+'</td>'
+      +'<td class="nowrap">'+fmtExcelMod(r.mod3)+'</td><td class="nowrap">'+fmtExcelOp(r.op3)+'</td>'
+      +'<td class="nowrap">'+fmtExcelMod(r.mod4)+'</td><td class="nowrap">'+fmtExcelOp(r.op4)+'</td>'
+      +'<td class="nowrap">'+fmtExcelPercent(r.acumulado)+'</td>'
+      +'<td>'+escapeHtml(r.diagnostico)+'</td>'
+      +'<td class="nowrap">'+escapeHtml(nivelKey)+'</td>'
+      +'<td>'+escapeHtml(r.obs||'')+'</td>'
+      +'</tr>';
+  }).join('');
+}
+
+function buildExportDocument(mode){
   var filtros=getActiveFiltersForExport();
   var agora=new Date();
+  if(mode==='pdf'){
+    return {
+      dateStamp:agora.toISOString().slice(0,10),
+      html:buildPdfDocument(agora,filtros)
+    };
+  }
   return {
     dateStamp:agora.toISOString().slice(0,10),
     html:'<!DOCTYPE html><html><head><meta charset="UTF-8"><style>'
@@ -1454,7 +1821,7 @@ function exportFilteredToExcel(){
 }
 
 function exportFilteredToPdf(){
-  var exportDoc=buildExportDocument();
+  var exportDoc=buildExportDocument('pdf');
   var printWindow=window.open('','_blank','width=1200,height=800');
   if(!printWindow) return;
   printWindow.document.open();
