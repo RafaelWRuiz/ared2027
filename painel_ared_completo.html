@@ -206,6 +206,7 @@ svg .mun-path{stroke:#fff;stroke-width:0.4;cursor:pointer;transition:all 0.15s}
 svg .mun-path:hover{opacity:0.75;stroke:#333;stroke-width:0.8}
 svg .mun-path.selected{stroke:#1e1710;stroke-width:2}
 svg .mun-path.no-data{cursor:default}
+svg .unit-marker{cursor:pointer}
 svg .unit-dot{cursor:pointer;stroke:#fffcf7;stroke-width:1.5;filter:drop-shadow(0 1px 2px rgba(30,23,16,0.25));transition:opacity 0.15s}
 svg .unit-dot:hover{opacity:0.8}
 svg .unit-dot.selected{stroke:#1e1710;stroke-width:2}
@@ -1210,7 +1211,7 @@ function renderSaoPauloUnitList(regional,municipio,units,munProj,cor,focusMunici
   munGroup.append('text')
     .attr('x',panelX+14)
     .attr('y',panelY+14)
-    .attr('font-size',8.5)
+    .attr('font-size',9.5)
     .attr('font-weight','800')
     .attr('letter-spacing','1px')
     .attr('text-transform','uppercase')
@@ -1257,8 +1258,8 @@ function renderSaoPauloUnitList(regional,municipio,units,munProj,cor,focusMunici
       .text(point.idx+1);
     g.append('text')
       .attr('x',10)
-      .attr('y',2.8)
-      .attr('font-size',8.3)
+      .attr('y',3)
+      .attr('font-size',9.1)
       .attr('font-weight','700')
       .attr('fill','#3b3026')
       .attr('pointer-events','none')
