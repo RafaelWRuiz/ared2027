@@ -36,6 +36,15 @@ h1{font-size:22px;font-weight:800;color:#1e1710;letter-spacing:-0.5px}
 .map-layout{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:16px;align-items:start}
 .map-card{background:#fffcf7;border:1px solid rgba(180,155,110,0.3);border-radius:16px;padding:16px;position:relative}
 #map svg{display:block;width:100%;height:auto}
+.capital-panel{display:none!important}
+.capital-panel.docked-left{display:none!important}
+.capital-panel.open{display:none!important}
+.capital-panel-title{font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:#a8987f;font-weight:800;margin-bottom:6px}
+.capital-panel-sub{font-size:11px;color:#7a6a55;line-height:1.35;margin-bottom:10px}
+.capital-panel-actions{display:flex;flex-direction:column;gap:6px}
+.capital-btn{border:1px solid rgba(180,155,110,0.35);background:#faf6ef;color:#7a6a55;border-radius:10px;padding:8px 10px;font-size:11px;font-weight:700;text-align:left;cursor:pointer}
+.capital-btn:hover{background:#f4efe7;color:#1e1710}
+.capital-btn.active{background:#1e1710;color:#fffcf7;border-color:#1e1710}
 .sidebar{display:flex;flex-direction:column;gap:12px}
 .card{background:#fffcf7;border:1px solid rgba(180,155,110,0.3);border-radius:14px;padding:14px 16px}
 .card-title{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#a8987f;margin-bottom:10px}
@@ -256,6 +265,15 @@ svg .unit-label{pointer-events:none;font-size:7px;font-weight:800;fill:#fffcf7;t
   <div class="map-layout">
     <div class="map-card">
       <button class="btn-voltar" id="btn-voltar" onclick="resetZoom()">← Voltar ao estado</button>
+      <div class="capital-panel" id="capital-panel">
+        <div class="capital-panel-title">Município de São Paulo</div>
+        <div class="capital-panel-sub">Escolha qual regional da capital você quer visualizar.</div>
+        <div class="capital-panel-actions">
+          <button class="capital-btn" type="button" data-capital-regional="Grande São Paulo Noroeste" onclick="jumpToCapitalRegional('Grande São Paulo Noroeste')">São Paulo Noroeste</button>
+          <button class="capital-btn" type="button" data-capital-regional="Grande São Paulo Leste" onclick="jumpToCapitalRegional('Grande São Paulo Leste')">São Paulo Leste</button>
+          <button class="capital-btn" type="button" data-capital-regional="Grande São Paulo Sul/Baixada Santista" onclick="jumpToCapitalRegional('Grande São Paulo Sul/Baixada Santista')">São Paulo Sul</button>
+        </div>
+      </div>
       <div id="map"></div>
       <div class="map-credit">
         <div class="mc-title">CGETEC-ACA</div>
@@ -413,9 +431,24 @@ REGIONAIS.features.forEach(function(f){f.properties.alerta=__ALERTA_COUNTS[f.pro
 const MAX_ALERTA = Math.max.apply(null,Object.values(__ALERTA_COUNTS).concat([1]));
 const PAGE_SIZE = 30;
 
+['Grande São Paulo Noroeste','Grande São Paulo Sul/Baixada Santista'].forEach(function(regional){
+  var target=MUN_BY_REGIONAL[regional];
+  var source=((MUN_BY_REGIONAL['Grande São Paulo Leste']||{}).features||[]).find(function(f){
+    return f.properties && f.properties.name==='São Paulo';
+  });
+  if(!target || !source) return;
+  var already=((target.features)||[]).some(function(f){return f.properties && f.properties.name==='São Paulo';});
+  if(already) return;
+  var clone=JSON.parse(JSON.stringify(source));
+  clone.properties.regional=regional;
+  target.features.push(clone);
+});
+
 var activeRegional = null;
 var activeMunicipio = null;
 var activeUnidade = null;
+var activeCapitalRegional = null;
+var pendingMunicipioSelection = null;
 var activeDiagnostico = null;
 var activeNiveis = {};
 var currentPage = 1;
@@ -698,11 +731,99 @@ var spBorderEl = svg.append('path').attr('id','sp-border').datum(SP_BORDER).attr
   .attr('fill','#e4ddd2').attr('stroke','#c8bfb0').attr('stroke-width',1.5);
 
 var mapGroup = svg.append('g');
+var capitalOverviewGroup = svg.append('g');
 var munGroup = svg.append('g').attr('opacity',0);
 var calloutGroup = svg.append('g');
 var labelGroup = svg.append('g');
 var tip = document.getElementById('tip');
 var btnVoltar = document.getElementById('btn-voltar');
+var capitalPanel = document.getElementById('capital-panel');
+var CAPITAL_REGIONALS = ['Grande São Paulo Noroeste','Grande São Paulo Leste','Grande São Paulo Sul/Baixada Santista'];
+
+function isCapitalRegional(regional){
+  return CAPITAL_REGIONALS.some(function(item){return normText(item)===normText(regional);});
+}
+function getCapitalRegionalLabel(regional){
+  return CAPITAL_REGIONALS.find(function(item){return normText(item)===normText(regional);}) || regional;
+}
+function getRegionalFeatureByName(regional){
+  return REGIONAIS.features.find(function(f){
+    return f.properties && normText(f.properties.regional)===normText(regional);
+  }) || null;
+}
+function closeCapitalPanel(){
+  activeCapitalRegional=null;
+  if(!capitalPanel) return;
+  capitalPanel.classList.remove('open','docked-left');
+  capitalPanel.querySelectorAll('.capital-btn').forEach(function(btn){btn.classList.remove('active');});
+}
+function openCapitalPanel(regional){
+  if(!capitalPanel || !isCapitalRegional(regional)) return;
+  activeCapitalRegional=getCapitalRegionalLabel(regional);
+  capitalPanel.classList.add('open');
+  capitalPanel.classList.toggle('docked-left',normText(activeMunicipio)==='sao paulo');
+  capitalPanel.querySelectorAll('.capital-btn').forEach(function(btn){
+    btn.classList.toggle('active',normText(btn.getAttribute('data-capital-regional'))===normText(activeCapitalRegional));
+  });
+}
+function jumpToCapitalRegional(regional){
+  if(!isCapitalRegional(regional)) return;
+  pendingMunicipioSelection='São Paulo';
+  var resolvedRegional=getCapitalRegionalLabel(regional);
+  if(normText(activeRegional)===normText(resolvedRegional)){
+    openCapitalPanel(resolvedRegional);
+    return;
+  }
+  var feat=getRegionalFeatureByName(resolvedRegional);
+  if(feat) zoomToRegional(feat.properties.regional,feat,feat.properties.cor);
+}
+function getRegionalColor(regional){
+  var feat=getRegionalFeatureByName(regional);
+  return feat ? feat.properties.cor : '#c98b73';
+}
+function buildCapitalOverviewSegments(bounds){
+  var x0=bounds[0][0], y0=bounds[0][1], x1=bounds[1][0], y1=bounds[1][1];
+  var w=x1-x0, h=y1-y0, pad=6;
+  return [
+    {
+      regional:'Grande São Paulo Noroeste',
+      points:[
+        [x0-pad,y0-pad],
+        [x0+w*0.60,y0-pad],
+        [x0+w*0.55,y0+h*0.18],
+        [x0+w*0.58,y0+h*0.34],
+        [x0+w*0.49,y0+h*0.46],
+        [x0+w*0.43,y0+h*0.58],
+        [x0+w*0.34,y1+pad],
+        [x0-pad,y1+pad]
+      ]
+    },
+    {
+      regional:'Grande São Paulo Leste',
+      points:[
+        [x0+w*0.46,y0-pad],
+        [x1+pad,y0-pad],
+        [x1+pad,y0+h*0.58],
+        [x0+w*0.73,y0+h*0.56],
+        [x0+w*0.60,y0+h*0.44],
+        [x0+w*0.54,y0+h*0.22]
+      ]
+    },
+    {
+      regional:'Grande São Paulo Sul/Baixada Santista',
+      points:[
+        [x0+w*0.28,y0+h*0.40],
+        [x0+w*0.58,y0+h*0.36],
+        [x0+w*0.74,y0+h*0.54],
+        [x1+pad,y1+pad],
+        [x0-pad,y1+pad]
+      ]
+    }
+  ];
+}
+function renderCapitalOverview(){
+  capitalOverviewGroup.selectAll('*').remove();
+}
 
 var CALLOUTS = {
   'Grande São Paulo Noroeste':             {ly_pct:0.74, lx_pct:0.86},
@@ -801,14 +922,17 @@ REGIONAIS.features.forEach(function(f) {
     if(l2) drawLabel(l2,centroid[1]+7);
   }
 });
+renderCapitalOverview();
 
 function zoomToRegional(regional,feature,cor){
   activeRegional=regional; activeMunicipio=null; activeUnidade=null;
   activeDiagnostico=null;
+  closeCapitalPanel();
   setNiveis(['N1','N2','N3']);
   tip.style.display='none'; btnVoltar.style.display='block';
   mapGroup.selectAll('.reg-path').transition().duration(400)
     .attr('opacity',function(){return this.getAttribute('data-regional')===regional?1:0.12;});
+  capitalOverviewGroup.transition().duration(300).attr('opacity',0);
   labelGroup.transition().duration(300).attr('opacity',0);
   calloutGroup.transition().duration(300).attr('opacity',0);
   spBorderEl.transition().duration(400).attr('opacity',0);
@@ -843,6 +967,39 @@ function zoomToRegional(regional,feature,cor){
       munStats[r.municipio].total++;
       if(isAltoEvasao(r)) munStats[r.municipio].alto++;
     });
+    function clearMunicipioSelection(){
+      activeMunicipio=null;
+      activeUnidade=null;
+      closeCapitalPanel();
+      resetMunicipioFocus();
+      munGroup.selectAll('.mun-path').classed('selected',false)
+        .transition().duration(200).attr('opacity',1);
+      munGroup.selectAll('.unit-dot').classed('selected',false);
+      munGroup.selectAll('.unit-marker').transition().duration(200).attr('opacity',1);
+      munGroup.selectAll('.unit-leader').transition().duration(200).attr('stroke-opacity',0.34);
+      updateFilterChip('regional',regional);
+    }
+    function selectMunicipio(mun){
+      var isCapital = mun==='São Paulo';
+      activeMunicipio=mun;
+      activeUnidade=null;
+      if(isCapital) resetMunicipioFocus();
+      else focusMunicipioByName(mun);
+      munGroup.selectAll('.mun-path')
+        .classed('selected',function(dd){return dd.properties.name===mun;})
+        .transition().duration(200)
+        .attr('opacity',function(dd){return dd.properties.name===mun?1:0.22;});
+      munGroup.selectAll('.unit-dot').classed('selected',false);
+      munGroup.selectAll('.unit-marker').transition().duration(200)
+        .attr('opacity',function(){return this.getAttribute('data-mun')===mun?1:0.18;});
+      munGroup.selectAll('.unit-leader').transition().duration(200)
+        .attr('stroke-opacity',function(){
+          return this.parentNode && this.parentNode.getAttribute('data-mun')===mun ? 0.34 : 0.08;
+        });
+      if(isCapital) openCapitalPanel(regional);
+      else closeCapitalPanel();
+      updateFilterChip('municipio',mun);
+    }
     mapGroup.transition().duration(500).attr('opacity',0);
 
     munGroup.selectAll('path').data(munData.features).join('path')
@@ -867,26 +1024,9 @@ function zoomToRegional(regional,feature,cor){
         var mun=d.properties.name;
         if(!munStats[mun]) return;
         if(activeMunicipio===mun){
-          activeMunicipio=null;
-          activeUnidade=null;
-          resetMunicipioFocus();
-          munGroup.selectAll('.mun-path').classed('selected',false)
-            .transition().duration(200).attr('opacity',1);
-          munGroup.selectAll('.unit-dot').classed('selected',false);
-          munGroup.selectAll('.unit-marker').transition().duration(200).attr('opacity',1);
-          updateFilterChip('regional',regional);
+          clearMunicipioSelection();
         } else {
-          activeMunicipio=mun;
-          activeUnidade=null;
-          focusMunicipioByName(mun);
-          munGroup.selectAll('.mun-path')
-            .classed('selected',function(dd){return dd.properties.name===mun;})
-            .transition().duration(200)
-            .attr('opacity',function(dd){return dd.properties.name===mun?1:0.22;});
-          munGroup.selectAll('.unit-dot').classed('selected',false);
-          munGroup.selectAll('.unit-marker').transition().duration(200)
-            .attr('opacity',function(){return this.getAttribute('data-mun')===mun?1:0.18;});
-          updateFilterChip('municipio',mun);
+          selectMunicipio(mun);
         }
         applyFilters();
       });
@@ -908,8 +1048,13 @@ function zoomToRegional(regional,feature,cor){
       });
     }
     renderUnitMarkers(regional,munData,munPathFn,munProj,cor,focusMunicipioByName);
+    if(pendingMunicipioSelection && munStats[pendingMunicipioSelection]){
+      selectMunicipio(pendingMunicipioSelection);
+      pendingMunicipioSelection=null;
+    }
   }
-  applyFilters(); updateFilterChip('regional',regional);
+  applyFilters();
+  if(!activeMunicipio) updateFilterChip('regional',regional);
 }
 
 function getUnitsForMunicipio(regional,municipio){
@@ -933,6 +1078,231 @@ function getApproxUnitPoint(unitName,municipio,idx,munProj){
   return point && isFinite(point[0]) && isFinite(point[1]) ? point : null;
 }
 
+function isSaoPauloMunicipio(nome){
+  return normText(nome)==='sao paulo';
+}
+
+function formatUnitListLabel(nome,maxLen){
+  var text=(nome||'').replace(/^Etec\s+/i,'').replace(/^ETEC\s+/,'').trim();
+  var limit=maxLen||26;
+  return text.length>limit ? text.slice(0,limit-1)+'…' : text;
+}
+
+function fanOutMarkerClusters(points,clusterDist,step){
+  if(points.length<=1) return points;
+  var distLimit=clusterDist||12;
+  var spacing=step||10;
+  var groups=[];
+  points.forEach(function(point){
+    var added=false;
+    for(var i=0;i<groups.length;i++){
+      var group=groups[i];
+      var dx=point.x-group.cx, dy=point.y-group.cy;
+      if(Math.sqrt(dx*dx+dy*dy)<=distLimit){
+        group.points.push(point);
+        var count=group.points.length;
+        group.cx=((group.cx*(count-1))+point.x)/count;
+        group.cy=((group.cy*(count-1))+point.y)/count;
+        added=true;
+        break;
+      }
+    }
+    if(!added) groups.push({cx:point.x,cy:point.y,points:[point]});
+  });
+  groups.forEach(function(group){
+    if(group.points.length<=1) return;
+    var count=group.points.length;
+    group.points.forEach(function(point,idx){
+      var ring=Math.floor(idx/8);
+      var posInRing=idx%8;
+      var ringCount=Math.min(8,count-ring*8);
+      var angle=(-Math.PI/2)+(Math.PI*2*posInRing/ringCount);
+      var radius=spacing+(ring*spacing*1.22);
+      point.originX=point.x;
+      point.originY=point.y;
+      point.x=group.cx+Math.cos(angle)*radius;
+      point.y=group.cy+Math.sin(angle)*radius;
+      point.data.clustered=true;
+    });
+  });
+  return points;
+}
+
+function spreadMarkerPositions(points,anchor,options){
+  if(points.length<=1) return points;
+  var settings=typeof options==='number' ? {minDist:options} : (options||{});
+  var adjusted=points.map(function(p){
+    return {
+      x:p.x,
+      y:p.y,
+      baseX:p.x,
+      baseY:p.y,
+      originX:typeof p.originX==='number' ? p.originX : p.x,
+      originY:typeof p.originY==='number' ? p.originY : p.y,
+      data:p.data
+    };
+  });
+  var targetDist=settings.minDist||16;
+  for(var iter=0;iter<80;iter++){
+    for(var i=0;i<adjusted.length;i++){
+      for(var j=i+1;j<adjusted.length;j++){
+        var a=adjusted[i], b=adjusted[j];
+        var dx=b.x-a.x, dy=b.y-a.y;
+        var dist=Math.sqrt(dx*dx+dy*dy) || 0.001;
+        if(dist>=targetDist) continue;
+        var push=(targetDist-dist)/2;
+        var ux=dx/dist, uy=dy/dist;
+        a.x-=ux*push; a.y-=uy*push;
+        b.x+=ux*push; b.y+=uy*push;
+      }
+    }
+    adjusted.forEach(function(p,idx){
+      var spring=points[idx].data.hasApprox ? (settings.springApprox||0.09) : (settings.springFallback||0.14);
+      p.x += (p.baseX-p.x)*spring;
+      p.y += (p.baseY-p.y)*spring;
+      var adx=p.x-anchor[0], ady=p.y-anchor[1];
+      var maxRadius=points[idx].data.hasApprox ? (settings.maxRadiusApprox||36) : (settings.maxRadiusFallback||26);
+      var radius=Math.sqrt(adx*adx+ady*ady) || 0.001;
+      if(radius>maxRadius){
+        p.x=anchor[0]+adx/radius*maxRadius;
+        p.y=anchor[1]+ady/radius*maxRadius;
+      }
+    });
+  }
+  return adjusted;
+}
+
+function renderSaoPauloUnitList(regional,municipio,units,munProj,cor,focusMunicipioByName){
+  var basePoints=units.map(function(unit,idx){
+    var approxPoint=getApproxUnitPoint(unit.nome,municipio,idx,munProj);
+    return {
+      unit:unit,
+      idx:idx,
+      x:approxPoint ? approxPoint[0] : 0,
+      y:approxPoint ? approxPoint[1] : 0
+    };
+  }).filter(function(point){
+    return isFinite(point.x) && isFinite(point.y);
+  }).sort(function(a,b){
+    if(Math.abs(a.y-b.y)>14) return a.y-b.y;
+    return a.x-b.x;
+  });
+  if(!basePoints.length) return;
+
+  var columns=1;
+  var rowsPerCol=basePoints.length;
+  var rowHeight=14;
+  var colWidth=250;
+  var panelWidth=266;
+  var panelHeight=38+(rowsPerCol*rowHeight);
+  var panelX=W-panelWidth-28;
+  var panelY=18;
+
+  munGroup.append('rect')
+    .attr('x',panelX)
+    .attr('y',panelY)
+    .attr('width',panelWidth)
+    .attr('height',panelHeight)
+    .attr('rx',12)
+    .attr('fill','rgba(255,252,247,0.93)')
+    .attr('stroke','rgba(180,155,110,0.42)')
+    .attr('stroke-width',1);
+  munGroup.append('text')
+    .attr('x',panelX+14)
+    .attr('y',panelY+14)
+    .attr('font-size',8.5)
+    .attr('font-weight','800')
+    .attr('letter-spacing','1px')
+    .attr('text-transform','uppercase')
+    .attr('fill','#a8987f')
+    .text('UNIDADES DE SÃO PAULO');
+
+  basePoints.forEach(function(point,sortedIdx){
+    var row=sortedIdx;
+    var anchorX=panelX+14;
+    var anchorY=panelY+25+(row*rowHeight);
+    var unit=point.unit;
+    var g=munGroup.append('g')
+      .attr('class','unit-marker')
+      .attr('data-mun',municipio)
+      .attr('data-unit',unit.nome)
+      .attr('transform','translate('+anchorX+','+anchorY+')')
+      .attr('opacity',0);
+    g.append('line')
+      .attr('class','unit-leader')
+      .attr('x1',point.x-anchorX)
+      .attr('y1',point.y-anchorY)
+      .attr('x2',-8)
+      .attr('y2',0)
+      .attr('stroke',cor)
+      .attr('stroke-width',1)
+      .attr('stroke-opacity',0.34)
+      .attr('pointer-events','none');
+    g.append('circle')
+      .attr('cx',point.x-anchorX)
+      .attr('cy',point.y-anchorY)
+      .attr('r',2.3)
+      .attr('fill',cor)
+      .attr('fill-opacity',0.55)
+      .attr('pointer-events','none');
+    g.append('circle')
+      .attr('class','unit-dot')
+      .attr('data-mun',municipio)
+      .attr('data-unit',unit.nome)
+      .attr('r',5.2)
+      .attr('fill',cor);
+    g.append('text')
+      .attr('class','unit-label')
+      .attr('y',0.4)
+      .text(point.idx+1);
+    g.append('text')
+      .attr('x',10)
+      .attr('y',2.8)
+      .attr('font-size',8.3)
+      .attr('font-weight','700')
+      .attr('fill','#3b3026')
+      .attr('pointer-events','none')
+      .text(formatUnitListLabel(unit.nome,36));
+    g.append('rect')
+      .attr('x',-7)
+      .attr('y',-7)
+      .attr('width',colWidth-10)
+      .attr('height',13)
+      .attr('fill','transparent');
+    g.on('mousemove',function(event){
+        tip.style.display='block';
+        tip.style.left=(event.clientX+14)+'px'; tip.style.top=(event.clientY-8)+'px';
+        tip.innerHTML=renderDiagTooltip(unit.nome,municipio,unit.rows,'Clique para filtrar a unidade');
+      })
+      .on('mouseleave',function(){tip.style.display='none';})
+      .on('click',function(event){
+        event.stopPropagation();
+        activeRegional=regional;
+        activeMunicipio=municipio;
+        activeUnidade=unit.nome;
+        resetMunicipioFocus();
+        openCapitalPanel(regional);
+        munGroup.selectAll('.mun-path')
+          .classed('selected',function(dd){return dd.properties.name===municipio;})
+          .transition().duration(200)
+          .attr('opacity',function(dd){return dd.properties.name===municipio?1:0.18;});
+        munGroup.selectAll('.unit-dot')
+          .classed('selected',function(){return this.getAttribute('data-unit')===unit.nome;});
+        munGroup.selectAll('.unit-marker')
+          .transition().duration(200)
+          .attr('opacity',function(){return this.getAttribute('data-unit')===unit.nome?1:(this.getAttribute('data-mun')===municipio?0.35:0.12);});
+        munGroup.selectAll('.unit-leader')
+          .transition().duration(200)
+          .attr('stroke-opacity',function(){
+            return this.parentNode && this.parentNode.getAttribute('data-unit')===unit.nome ? 0.8 : 0.12;
+          });
+        updateFilterChip('unidade',unit.nome);
+        applyFilters();
+      });
+    g.transition().duration(420).delay(250+sortedIdx*20).attr('opacity',1);
+  });
+}
+
 function renderUnitMarkers(regional,munData,munPathFn,munProj,cor,focusMunicipioByName){
   munData.features.forEach(function(mf){
     var municipio=mf.properties.name;
@@ -940,12 +1310,39 @@ function renderUnitMarkers(regional,munData,munPathFn,munProj,cor,focusMunicipio
     if(units.length<=1) return;
     var c=munPathFn.centroid(mf);
     if(!c||isNaN(c[0])) return;
+    if(isSaoPauloMunicipio(municipio)){
+      renderSaoPauloUnitList(regional,municipio,units,munProj,cor,focusMunicipioByName);
+      return;
+    }
     var radius=Math.min(18,8+units.length*1.8);
-    units.forEach(function(unit,idx){
+    var rawPoints=units.map(function(unit,idx){
       var angle=(Math.PI*2/units.length)*idx-Math.PI/2;
       var approxPoint=getApproxUnitPoint(unit.nome,municipio,idx,munProj);
-      var x=approxPoint ? approxPoint[0] : c[0]+Math.cos(angle)*radius;
-      var y=approxPoint ? approxPoint[1] : c[1]+Math.sin(angle)*radius;
+      return {
+        x:approxPoint ? approxPoint[0] : c[0]+Math.cos(angle)*radius,
+        y:approxPoint ? approxPoint[1] : c[1]+Math.sin(angle)*radius,
+        data:{unit:unit,idx:idx,hasApprox:!!approxPoint}
+      };
+    });
+    var adjustedPoints=spreadMarkerPositions(rawPoints,c,{minDist:15});
+    adjustedPoints.forEach(function(point){
+      var unit=point.data.unit;
+      var idx=point.data.idx;
+      var x=point.x;
+      var y=point.y;
+      var moved=Math.sqrt(Math.pow(x-point.originX,2)+Math.pow(y-point.originY,2));
+      if(moved>6){
+        munGroup.append('line')
+          .attr('class','unit-leader')
+          .attr('x1',point.originX)
+          .attr('y1',point.originY)
+          .attr('x2',x)
+          .attr('y2',y)
+          .attr('stroke',cor)
+          .attr('stroke-width',1.1)
+          .attr('stroke-opacity',0.28)
+          .attr('pointer-events','none');
+      }
       var g=munGroup.append('g')
         .attr('class','unit-marker')
         .attr('data-mun',municipio)
@@ -973,7 +1370,10 @@ function renderUnitMarkers(regional,munData,munPathFn,munProj,cor,focusMunicipio
           activeRegional=regional;
           activeMunicipio=municipio;
           activeUnidade=unit.nome;
-          focusMunicipioByName(municipio);
+          if(municipio==='São Paulo') resetMunicipioFocus();
+          else focusMunicipioByName(municipio);
+          if(municipio==='São Paulo') openCapitalPanel(regional);
+          else closeCapitalPanel();
           munGroup.selectAll('.mun-path')
             .classed('selected',function(dd){return dd.properties.name===municipio;})
             .transition().duration(200)
@@ -1001,6 +1401,8 @@ function updateFilterChip(type,value){
 function resetZoom(){
   activeRegional=null; activeMunicipio=null; activeUnidade=null;
   activeDiagnostico=null;
+  pendingMunicipioSelection=null;
+  closeCapitalPanel();
   setNiveis([]);
   tip.style.display='none'; btnVoltar.style.display='none';
   document.getElementById('filter-bar').style.display='none';
@@ -1008,6 +1410,7 @@ function resetZoom(){
   munGroup.selectAll('*').remove(); munGroup.attr('opacity',0).attr('transform',null);
   mapGroup.transition().duration(500).attr('opacity',1);
   mapGroup.selectAll('.reg-path').transition().duration(400).attr('opacity',1);
+  capitalOverviewGroup.transition().duration(400).attr('opacity',1);
   labelGroup.transition().duration(400).attr('opacity',1);
   calloutGroup.transition().duration(400).attr('opacity',1);
   spBorderEl.transition().duration(400).attr('opacity',1);
